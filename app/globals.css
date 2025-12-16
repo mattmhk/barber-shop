@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #000000;
+  color: #FFFFFF;
+  overflow-x: hidden;
+}
+
+/* Fade scroll effect */
+.fade-scroll {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+}
+
+.fade-scroll.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #FFFFFF;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #CCCCCC;
+}
+
+/* Selection color */
+::selection {
+  background-color: #FFFFFF;
+  color: #000000;
+}
+
+/* Smooth transitions */
+* {
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+
