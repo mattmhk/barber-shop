@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase, Reservation, Service, Barber } from '@/lib/supabase'
-import { Calendar, Clock, User, Mail, Phone, Trash2, Edit, Check, X } from 'lucide-react'
+import { Calendar, Clock, User, Mail, Phone, Trash2 } from 'lucide-react'
 import { format } from 'date-fns'
 import FadeScroll from '@/components/FadeScroll'
 
@@ -11,7 +11,7 @@ export default function AdminPage() {
   const [services, setServices] = useState<Service[]>([])
   const [barbers, setBarbers] = useState<Barber[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'reservations' | 'services' | 'barbers'>('reservations')
+  const [activeTab, setActiveTab] = useState<'reservations'>('reservations')
   const [password, setPassword] = useState('')
   const [authenticated, setAuthenticated] = useState(false)
 
@@ -127,19 +127,6 @@ export default function AdminPage() {
     )
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'bg-green-500/20 text-green-400 border-green-500/50'
-      case 'completed':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/50'
-      case 'cancelled':
-        return 'bg-red-500/20 text-red-400 border-red-500/50'
-      default:
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50'
-    }
-  }
-
   return (
     <div className="min-h-screen bg-black text-white py-12 px-4">
       <div className="max-w-7xl mx-auto">
@@ -158,21 +145,12 @@ export default function AdminPage() {
           </div>
         </FadeScroll>
 
-        {/* Tabs */}
-        <div className="flex gap-4 mb-8 border-b border-white/20">
-          {(['reservations', 'services', 'barbers'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-6 py-3 font-bold border-b-2 transition-colors ${
-                activeTab === tab
-                  ? 'border-white'
-                  : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-            >
-              {tab.toUpperCase()}
-            </button>
-          ))}
+        {/* Simple header for reservations */}
+        <div className="mb-8 border-b border-white/20 pb-4">
+          <h2 className="text-2xl font-bold">Reservations</h2>
+          <p className="text-sm text-gray-400 mt-1">
+            View all bookings. You can delete reservations if needed.
+          </p>
         </div>
 
         {/* Reservations Tab */}
@@ -224,40 +202,17 @@ export default function AdminPage() {
                           {barbers.find((b) => b.id === reservation.barber_id)?.name || 'N/A'}
                         </p>
                       </div>
-                      <div>
-                        <span
-                          className={`inline-block px-3 py-1 border rounded text-sm font-bold mb-4 ${getStatusColor(
-                            reservation.status
-                          )}`}
-                        >
-                          {reservation.status.toUpperCase()}
+                      <div className="flex flex-col items-start gap-2">
+                        <span className="inline-block px-3 py-1 border border-white/30 rounded text-xs uppercase tracking-wide text-gray-300">
+                          {reservation.status}
                         </span>
-                        <div className="flex gap-2">
-                          {reservation.status === 'pending' && (
-                            <button
-                              onClick={() => updateReservationStatus(reservation.id, 'confirmed')}
-                              className="flex-1 bg-green-500/20 text-green-400 border border-green-500/50 px-3 py-2 text-sm hover:bg-green-500/30 transition-colors"
-                            >
-                              <Check className="w-4 h-4 inline mr-1" />
-                              Confirm
-                            </button>
-                          )}
-                          {reservation.status !== 'cancelled' && (
-                            <button
-                              onClick={() => updateReservationStatus(reservation.id, 'cancelled')}
-                              className="flex-1 bg-red-500/20 text-red-400 border border-red-500/50 px-3 py-2 text-sm hover:bg-red-500/30 transition-colors"
-                            >
-                              <X className="w-4 h-4 inline mr-1" />
-                              Cancel
-                            </button>
-                          )}
-                          <button
-                            onClick={() => deleteReservation(reservation.id)}
-                            className="bg-red-500/20 text-red-400 border border-red-500/50 px-3 py-2 hover:bg-red-500/30 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => deleteReservation(reservation.id)}
+                          className="bg-red-500/20 text-red-400 border border-red-500/50 px-3 py-2 text-sm hover:bg-red-500/30 transition-colors flex items-center gap-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Delete</span>
+                        </button>
                       </div>
                     </div>
                     {reservation.notes && (
@@ -272,55 +227,6 @@ export default function AdminPage() {
           </FadeScroll>
         )}
 
-        {/* Services Tab */}
-        {activeTab === 'services' && (
-          <FadeScroll>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {services.length === 0 ? (
-                <p className="text-gray-400 col-span-full text-center py-12">
-                  No services in database. Add them through Supabase dashboard.
-                </p>
-              ) : (
-                services.map((service) => (
-                  <div
-                    key={service.id}
-                    className="bg-barber-gray border-2 border-white/10 p-6"
-                  >
-                    <h3 className="text-xl font-bold mb-2">{service.name}</h3>
-                    <p className="text-gray-400 text-sm mb-4">{service.description}</p>
-                    <div className="flex justify-between text-sm">
-                      <span>Duration: {service.duration} min</span>
-                      <span className="font-bold">${service.price}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </FadeScroll>
-        )}
-
-        {/* Barbers Tab */}
-        {activeTab === 'barbers' && (
-          <FadeScroll>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {barbers.length === 0 ? (
-                <p className="text-gray-400 col-span-full text-center py-12">
-                  No barbers in database. Add them through Supabase dashboard.
-                </p>
-              ) : (
-                barbers.map((barber) => (
-                  <div
-                    key={barber.id}
-                    className="bg-barber-gray border-2 border-white/10 p-6 text-center"
-                  >
-                    <h3 className="text-xl font-bold mb-2">{barber.name}</h3>
-                    <p className="text-gray-400 text-sm">{barber.bio}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </FadeScroll>
-        )}
       </div>
     </div>
   )

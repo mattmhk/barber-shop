@@ -3,16 +3,19 @@
 import { useState, useEffect } from 'react'
 import { supabase, Service, Barber, Reservation } from '@/lib/supabase'
 import { Calendar, Clock, User, Scissors, Check } from 'lucide-react'
-import { format, addDays, isSameDay, isBefore, parse } from 'date-fns'
+import { format, addDays, isSameDay, isBefore } from 'date-fns'
 import FadeScroll from '@/components/FadeScroll'
 
 // Thailand timezone (UTC+7)
 const THAILAND_OFFSET = 7 * 60 * 60 * 1000 // 7 hours in milliseconds
 
+// Shop closing time in minutes from midnight (19:00 in Thailand)
+const CLOSING_TIME_MINUTES = 19 * 60
+
 // Get current time in Thailand
 const getThailandTime = (): Date => {
   const now = new Date()
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
+  const utc = now.getTime() + now.getTimezoneOffset() * 60 * 1000
   return new Date(utc + THAILAND_OFFSET)
 }
 
@@ -20,16 +23,6 @@ const getThailandTime = (): Date => {
 const getThailandToday = (): Date => {
   const thailandNow = getThailandTime()
   return new Date(thailandNow.getFullYear(), thailandNow.getMonth(), thailandNow.getDate())
-}
-
-// Convert a date to Thailand time (treating it as if it's already in Thailand timezone)
-const toThailandDate = (date: Date): Date => {
-  // Create a date string in Thailand time format
-  const year = date.getFullYear()
-  const month = date.getMonth()
-  const day = date.getDate()
-  // Create date as if it's in Thailand timezone
-  return new Date(year, month, day)
 }
 
 export default function BookPage() {
@@ -115,36 +108,78 @@ export default function BookPage() {
     return trimmed
   }
 
+  const timeStringToMinutes = (time: string | null | undefined): number => {
+    const normalized = normalizeTime(time)
+    if (!normalized) return 0
+    const [hours, minutes] = normalized.split(':').map((v) => parseInt(v, 10))
+    return hours * 60 + minutes
+  }
+
+  // Total duration for a list of service IDs (from DB)
+  const getTotalDurationForServiceIds = (ids: string[] | null | undefined): number => {
+    if (!ids || !Array.isArray(ids)) return 0
+    return ids.reduce((sum, id) => {
+      const service = services.find((s) => s.id === id)
+      return sum + (service?.duration || 0)
+    }, 0)
+  }
+
+  // Total duration for currently selected services
+  const getSelectedServicesDuration = (): number => {
+    return selectedServices.reduce((sum, id) => {
+      const service = services.find((s) => s.id === id)
+      return sum + (service?.duration || 0)
+    }, 0)
+  }
+
+  // Normalize time string to HH:MM format
   // Check if a time slot is available
   const isTimeSlotAvailable = (time: string): boolean => {
     if (!selectedDate || !selectedBarber) return false
 
+    // Need at least one service selected to know duration
+    const selectedDuration = getSelectedServicesDuration()
+    if (selectedDuration <= 0) return false
+
+    const slotStartMinutes = timeStringToMinutes(time)
+    const slotEndMinutes = slotStartMinutes + selectedDuration
+
+    // Do not allow booking that goes past closing time
+    if (slotEndMinutes > CLOSING_TIME_MINUTES) {
+      return false
+    }
+
     // Check if time is in the past (for today) - using Thailand time
     const thailandToday = getThailandToday()
     if (isSameDay(selectedDate, thailandToday)) {
-      const [hours, minutes] = time.split(':').map(Number)
       const thailandNow = getThailandTime()
-      const timeSlot = new Date(thailandToday)
-      timeSlot.setHours(hours, minutes, 0, 0)
-      if (isBefore(timeSlot, thailandNow)) {
+      const nowMinutes =
+        thailandNow.getHours() * 60 + thailandNow.getMinutes()
+      if (slotStartMinutes <= nowMinutes) {
         return false
       }
     }
 
-    // Check if time slot conflicts with existing reservations
-    const normalizedTime = normalizeTime(time)
-    
-    const conflictingReservation = existingReservations.find((res) => {
+    // Check if time slot conflicts with existing reservations,
+    // taking into account the duration of each reservation.
+    const hasOverlap = existingReservations.some((res) => {
       if (!res.reservation_time) return false
-      const normalizedResTime = normalizeTime(res.reservation_time)
-      return normalizedResTime === normalizedTime
+
+      const resStartMinutes = timeStringToMinutes(res.reservation_time)
+      const resDuration = getTotalDurationForServiceIds(
+        (res as any).service_ids as string[]
+      )
+      if (resDuration <= 0) return false
+
+      const resEndMinutes = resStartMinutes + resDuration
+
+      // Overlap if intervals intersect: [slotStart, slotEnd) and [resStart, resEnd)
+      return (
+        slotStartMinutes < resEndMinutes && slotEndMinutes > resStartMinutes
+      )
     })
 
-    if (conflictingReservation) {
-      return false
-    }
-
-    return true
+    return !hasOverlap
   }
 
   const timeSlots = [
@@ -171,6 +206,15 @@ export default function BookPage() {
     e.preventDefault()
     if (!selectedDate || !selectedTime || selectedServices.length === 0 || !selectedBarber) {
       alert('Please complete all steps')
+      return
+    }
+
+    // Ensure the selected time with the chosen services fits before closing time
+    const selectedDuration = getSelectedServicesDuration()
+    const slotStartMinutes = timeStringToMinutes(selectedTime)
+    const slotEndMinutes = slotStartMinutes + selectedDuration
+    if (slotEndMinutes > CLOSING_TIME_MINUTES) {
+      alert('This service is too long to start at this time. Please choose an earlier time.')
       return
     }
 
@@ -245,33 +289,41 @@ export default function BookPage() {
 
         {/* Progress Steps */}
         <div className="mb-12">
-          <div className="flex justify-between items-center">
-            {[1, 2, 3, 4].map((s) => (
-              <div key={s} className="flex items-center flex-1">
-                <div
-                  className={`w-12 h-12 rounded-full border-2 flex items-center justify-center font-bold ${
-                    step >= s ? 'bg-white text-black border-white' : 'border-white/30 text-white/30'
-                  }`}
-                >
-                  {s}
-                </div>
-                {s < 4 && (
+          <div className="relative">
+            {/* Connecting line */}
+            <div className="absolute left-0 right-0 top-6 h-1 bg-white/20" />
+
+            <div className="grid grid-cols-4 text-center">
+              {[
+                { step: 1, label: 'Services' },
+                { step: 2, label: 'Barber' },
+                { step: 3, label: 'Date & Time' },
+                { step: 4, label: 'Details' },
+              ].map(({ step: s, label }) => (
+                <div key={s} className="flex flex-col items-center gap-2">
                   <div
-                    className={`flex-1 h-1 mx-2 ${
-                      step > s ? 'bg-white' : 'bg-white/30'
+                    className={`relative z-10 w-12 h-12 rounded-full border-2 flex items-center justify-center font-bold ${
+                      step >= s
+                        ? 'bg-white text-black border-white'
+                        : 'bg-black border-white/30 text-white/30'
                     }`}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between mt-2 text-sm text-gray-400">
-            <span>Services</span>
-            <span>Barber</span>
-            <span>Date & Time</span>
-            <span>Details</span>
+                  >
+                    {s}
+                  </div>
+
+                  <span
+                    className={`text-sm ${
+                      step >= s ? 'text-gray-400' : 'text-white/30'
+                    }`}
+                  >
+                    {label}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
 
         <form onSubmit={handleSubmit}>
           {/* Step 1: Services */}
@@ -430,10 +482,6 @@ export default function BookPage() {
                       <div className="grid grid-cols-4 md:grid-cols-5 gap-2">
                         {timeSlots.map((time) => {
                           const isAvailable = isTimeSlotAvailable(time)
-                          const isBooked = existingReservations.some(res => {
-                            if (!res.reservation_time) return false
-                            return normalizeTime(res.reservation_time) === normalizeTime(time)
-                          })
                           return (
                             <button
                               key={time}
@@ -441,8 +489,6 @@ export default function BookPage() {
                               onClick={() => {
                                 if (isAvailable) {
                                   setSelectedTime(time)
-                                } else {
-                                  alert('This time slot is already booked. Please select another time.')
                                 }
                               }}
                               disabled={!isAvailable}
@@ -453,18 +499,9 @@ export default function BookPage() {
                                   ? 'border-white bg-white text-black'
                                   : 'border-white/30 hover:border-white/60'
                               }`}
-                              title={
-                                !isAvailable
-                                  ? isBooked
-                                    ? 'This time slot is already booked'
-                                    : 'This time slot is in the past'
-                                  : 'Available'
-                              }
+                              title={isAvailable ? 'Available' : 'This time slot is not available'}
                             >
                               {time}
-                              {isBooked && !isAvailable && (
-                                <span className="block text-xs mt-1 text-red-400">Booked</span>
-                              )}
                             </button>
                           )
                         })}

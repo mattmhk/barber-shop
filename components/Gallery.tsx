@@ -42,6 +42,7 @@ export default function Gallery() {
                   src={image.url}
                   alt={image.alt}
                   fill
+                  sizes="(min-width: 1280px) 360px, (min-width: 1024px) 300px, (min-width: 640px) 45vw, 90vw"
                   className="object-cover grayscale group-hover:grayscale-0 transition-all duration-700 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-black/50 group-hover:bg-black/20 transition-all duration-500" />

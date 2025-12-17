@@ -20,15 +20,7 @@ export default function Footer() {
             <div className="space-y-2 text-gray-400">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
-                <span>Mon - Fri: 9:00 AM - 7:00 PM</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                <span>Sat: 8:00 AM - 6:00 PM</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                <span>Sun: Closed</span>
+                <span>Open daily: 9:00 AM - 7:00 PM</span>
               </div>
             </div>
           </div>

@@ -82,6 +82,7 @@ export default function Barbers() {
                     src={barber.image_url || getDefaultBarberImage(barber.name)}
                     alt={barber.name}
                     fill
+                    sizes="(min-width: 1024px) 256px, (min-width: 768px) 240px, 200px"
                     className="object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
                     style={
                       barber.name.toLowerCase() === 'marcus'
